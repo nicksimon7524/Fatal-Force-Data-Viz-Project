@@ -1,0 +1,413 @@
+---
+title: "Fatal Force Data Visualization"
+output: html_document
+---
+Objective: Analyze the Washington Post's fatal force data set, with a focus on data visualization. 
+
+(Link to data set: https://github.com/washingtonpost/data-police-shootings)
+
+Load packages and download data set.
+```{r}
+
+library(tidyverse)
+library(readr)
+library(lubridate)
+library(knitr)
+library(kableExtra)
+library(tinytex)
+setwd("~/Desktop/RStudio Directory")
+police_data <- read_csv('fatal-police-shootings-data (2).csv')
+
+```
+
+
+Review data set. 
+```{r}
+
+view(police_data)
+
+```
+
+
+Determine the first and last dates on which shootings occurred and the total number of fatal shootings that occurred over this time frame.
+```{r}
+
+head(police_data)
+
+tail(police_data)
+
+nrow(police_data)
+
+```
+
+
+- First recorded shooting: January 2, 2015
+- Last recorded shooting: December 10, 2021
+- Total fatal shootings: 6,800
+
+
+Determine how many fatal shootings occurred per year from 2015 - 2021.
+```{r}
+
+police_data_tally <- police_data %>% mutate(assign_1 = 1)
+
+police_data_year_col <- police_data_tally %>% 
+                        mutate(year = year(police_data_tally$date))
+
+table_value_1 <- police_data_year_col %>% group_by(year) %>% 
+                                          summarize(yearly_sums = sum(assign_1))
+
+table_value_1 %>% 
+  kbl(col.names = c('Year', 'Total Fatal Shootings Per Year'), align = c('c', 'c')) %>%
+  kable_classic_2(full_width = F)
+
+```
+
+
+Determine the average number of fatal shootings per year from 2015 - 2021. (Note: the data set is missing shooting data for the last couple weeks of December 2021, so the average listed below is likely less than the true average.)
+```{r}
+
+yearly_sums_data <- police_data_year_col %>% 
+                    group_by(year) %>%
+                    summarize(yearly_sums = sum(assign_1)) %>% 
+                    mutate(yearly_sums = yearly_sums)
+
+yearly_sums_data %>% summarize(mean(yearly_sums)) %>% 
+                     mutate_if(is.numeric, round, digits = 2)
+
+```
+
+
+From the code above we see that approximately 971 fatal shootings occurred per year for the years on record. 
+
+Create a bar graph that shows the total number of fatal shootings per year from 2015 - 2021. 
+```{r}
+
+ggplot() + 
+geom_col (yearly_sums_data, mapping = aes(x = year, y = yearly_sums, fill = as.factor(year))) + 
+geom_text(yearly_sums_data, mapping = aes(x = year, y = yearly_sums, label = yearly_sums, vjust = -.2)) +
+scale_x_discrete(limits = c(2015, 2016, 2017, 2018, 2019, 2020, 2021),
+                 labels = c("2015", "2016", 
+                            "2017", "2018", 
+                            "2019", "2020", "2021")) +
+                 labs(title = "Total Fatal Shootings Per Year", 
+                      x = "Year", 
+                      y = "Fatal Shootings per Year", 
+                      fill = 'Year') +
+                 theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+Create line graphs that show fatal shooting rates on a month-by-month basis for each year.
+
+(Note: there is a steep drop off in the 2021 graph because of the missing values in December referenced above.)
+```{r}
+
+monthly_freq <- police_data %>% mutate(year = year(date), month = month(date)) %>%
+                                group_by(year, month) %>%
+                                summarise(n = n())
+
+monthly_freq %>% ggplot(aes(x = month, y = n, color = year)) +
+                 geom_point(monthly_freq, mapping = aes(color = as.factor(year))) +
+                 geom_line(monthly_freq, mapping = aes(color = as.factor(year))) +
+                 facet_wrap(vars(year)) +
+                 scale_x_discrete(limits = c(2, 4, 6, 8, 10, 12),
+                 labels = c("2", "4", "6", "8", "10", "12")) +
+                 scale_y_discrete(limits = c(20, 40, 60, 80, 100, 120),
+                 labels = c("20", "40", "60", "80", "100", "120")) +
+                 labs(title = "Total Fatal Shootings per Month", 
+                      x = "Months", 
+                      y = "Fatal Shootings per Month",
+                      fill = 'Year') +
+                 theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
+
+Determine the mean, median, and range with respect to age for individuals who were fatally shot. 
+```{r}
+
+police_data %>% summarize(mean(age, na.rm = T),
+                          median(age, na.rm = T),
+                          range(age, na.rm = T))
+
+left <- c(37.13, ' ')
+middle <- c(35, ' ')
+right <- c(6, 92)
+
+table_value_2 <- data.frame (left, middle, right)
+
+
+table_value_2 %>% 
+kbl(col.names = c('Mean', 'Median', 'Range'), align = c('c', 'c', 'c')) %>%
+kable_classic_2(full_width = F)
+
+```
+
+
+Create a histogram that shows the age distribution of individuals who were fatally shot.
+```{r}
+
+ggplot(police_data, aes(x = age)) + 
+geom_histogram (aes(y =..density..), 
+                breaks = seq(0, 100, by = 1), 
+                colour = "black", 
+                fill = "green") +
+stat_function(fun = dnorm, 
+              args = list(mean = mean(police_data$age), 
+              sd = sd(police_data$age))) +
+geom_density(bins = 100) +
+labs(title = "Age Distribution of Individuals Who Were Fatally Shot", 
+     x = "Age", 
+     y = "Density") +
+theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+Compare the number of males who were fatally shot to the number of females who were fatally shot. 
+```{r}
+
+gender_breakdown <- police_data %>% 
+                    group_by(gender) %>%
+                    drop_na() %>% 
+                    count() %>% 
+                    ungroup() %>% 
+                    mutate(perc = `n` / sum(`n`)) %>% 
+                    arrange(perc) %>%
+                    mutate(labels = scales::percent(perc)) %>% 
+                    mutate_if(is.numeric, round, digits = 4)
+
+gender_breakdown %>% kbl(col.names = c('Gender', 
+                                       'Total Fatal Shootings', 
+                                       'Decimal', 
+                                       'Rounded Percentage'), 
+                         align = c('c', 'c', 'c', 'c')) %>%
+                         kable_classic_2(full_width = F)
+
+```
+
+
+Create a pie chart that compares the number of males who were fatally shot to the number of females who were fatally shot. 
+```{r}
+
+gender_breakdown %>% ggplot(aes(x= "", y = perc, fill = gender)) +
+                     geom_bar(stat="identity", width=1) +
+                     geom_text(aes(label = labels),
+                                   position = position_stack(vjust = 0.52), 
+                                   cex = 2.9) +
+                     coord_polar("y", start=0) +
+                     labs(title = "Fatalities Broken Down by Gender",
+                          x = ' ' ,
+                          y = "Percentage",
+                          fill = 'Gender') +
+                     theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+Determine the average age of men and women who were fatally shot.
+```{r}
+
+table_value_4 <- police_data %>% 
+                 drop_na() %>% 
+                 group_by(gender) %>% 
+                 summarize(mean(age)) %>% 
+                 mutate_if(is.numeric, round, digits = 3)
+
+table_value_4 %>% 
+  kbl(col.names = c('Gender', 'Average Age When Fatally Shot'), 
+      align = c('c', 'c')) %>%
+  kable_classic_2(full_width = F)
+
+```
+
+
+Create a box and whisker plot that incorporates data on age and gender. 
+```{r}
+
+police_data %>% drop_na() %>% 
+                ggplot(mapping = aes(x = gender, y = age, fill = gender)) + 
+                geom_boxplot() + 
+                labs(title = "Age Distribution Between Sexes",
+                          x = 'Gender of Individual Shot' ,
+                          y = 'Age', 
+                          fill = 'Gender') +
+                theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+Determine the breakdown of race among individuals who were fatally shot. 
+```{r}
+
+race_breakdown <- police_data %>% 
+                  mutate(race_string = 
+                         case_when(race == 'W' ~ 'White, non-Hispanic',
+                                   race == 'B' ~ 'Black, non-Hispanic',
+                                   race == 'A' ~ 'Asian',
+                                   race == 'N' ~ 'Native American',
+                                   race == 'H' ~ 'Hispanic',
+                                   race == 'O' ~ 'Other'))
+
+
+table_value_5 <- race_breakdown %>% group_by(race_string) %>%
+                 drop_na() %>% 
+                 count() %>% 
+                 ungroup() %>% 
+                 mutate(perc = `n` / sum(`n`)) %>% 
+                 arrange(perc) %>%
+                 mutate(rounded = scales::percent(perc)) %>% 
+                 mutate_if(is.numeric, round, digits = 4) %>% 
+                 arrange(desc(n))
+
+
+table_value_5 %>% kbl(col.names = c('Race', 
+                                    'Total Fatal Shootings', 
+                                    'Decimal', 
+                                    'Unrounded Percentage'), 
+                      align = c('c', 'c')) %>%
+                      kable_classic_2(full_width = F)
+
+```
+
+
+Create a bar graph that shows the shooting breakdown by race. 
+```{r}
+
+ggplot() + 
+geom_col (table_value_5, mapping = aes(x = race_string, 
+                                       y = perc, fill = as.factor(race_string))) + 
+geom_text(table_value_5, mapping = aes(x = race_string, 
+                                       y = perc, label = perc, 
+                                       vjust = -.2)) +
+scale_x_discrete(limits = c("Asian", "Black, non-Hispanic", 
+                            "Hispanic", "Native American", 
+                            "Other", "White, non-Hispanic"),
+                 labels = c("A", "B", 
+                            "H", "N", 
+                            "O", "W")) +
+labs(title = "Breakdown of Fatal Shootings by Race", 
+     x = "Race", 
+     y = "Proportions", 
+     fill = 'Race') +
+theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+Determine the average age among individuals who were shot, according to race.
+```{r}
+
+table_value_6 <- race_breakdown %>% 
+                 drop_na() %>% 
+                 group_by(race_string) %>% 
+                 summarize(mean_age = mean(age)) %>% 
+                 mutate_if(is.numeric, round, digits = 3) %>% 
+                 arrange(desc(mean_age))
+
+table_value_6 %>% kbl(col.names = c('Race', 'Average Age When Fatally Shot'), 
+                      align = c('l', 'c')) %>% kable_classic_2(full_width = F)
+
+```
+
+
+Create a box and whisker plot that incorporates data on age and race.
+```{r}
+
+race_breakdown %>% 
+drop_na() %>% 
+ggplot(mapping = aes(x = race_string, y = age, fill = race_string)) + 
+geom_boxplot() + 
+scale_x_discrete(limits = c("Asian","Black, non-Hispanic", "Hispanic", 
+                              "Native American", "Other", "White, non-Hispanic"),
+                   labels = c("A", "B","H", "N", "O", "W")) +
+                   labs(title = "Age Distribution Among Races",
+                        x = 'Race of Individual Shot' ,
+                        y = 'Age', 
+                        fill = 'Race') +
+theme(plot.title = element_text(hjust = 0.5))   
+
+```
+
+
+A few more interesting tables.
+
+Five states with the most shootings from 2015 - 2021.
+```{r}
+
+top_5 <- police_data %>% 
+                  drop_na() %>% 
+                  group_by(state) %>% 
+                  summarize(totals = n()) %>% 
+                  mutate(frequency = totals / sum(totals)) %>% 
+                  mutate_at(vars(starts_with("frequency")), funs(round(., 4))) %>% 
+                  arrange(desc(totals)) %>% 
+                  head(5)
+
+top_5 %>% 
+kbl(col.names = c('Top States', 'Total Fatal Shootings', 'Proportions'), 
+    align = c('l', 'c')) %>% 
+kable_classic_2(full_width = F)
+
+```
+
+
+Five states with the least shootings from 2015 - 2021.
+```{r}
+
+bottom_5 <- police_data %>% 
+                  drop_na() %>% 
+                  group_by(state) %>% 
+                  summarize(totals = n()) %>% 
+                  mutate(frequency = totals / sum(totals)) %>% 
+                  mutate_at(vars(starts_with("frequency")), funs(round(., 4))) %>% 
+                  arrange(totals) %>% 
+                  head(5)
+
+bottom_5 %>% 
+kbl(col.names = c('Bottom States', 'Total Fatal Shootings', 'Proportions'), 
+    align = c('l', 'c')) %>% 
+kable_classic_2(full_width = F)
+
+```
+
+
+Breakdown of shootings that occurred when individuals who were shot were armed vs. unarmed. 
+```{r}
+
+armed_vs_unarmed <- police_data %>% drop_na(armed) %>% 
+                                    mutate(armed_vs_unarmed = ifelse (
+                                    armed == 'unarmed', 'Unarmed', 'Armed')) %>% 
+                                    group_by(armed_vs_unarmed) %>%
+                                    summarize (n = n()) %>% 
+                                    mutate(freq = n / sum(n)) %>% 
+                                    mutate_at(vars(starts_with("freq")), funs(round(., 4)))
+
+     
+armed_vs_unarmed %>% 
+kbl(col.names = c('Armed vs. Unarmed', 'Total Fatal Shootings', 'Proportions'), 
+    align = c('l', 'c')) %>% 
+kable_classic_2(full_width = F)
+
+```
+
+
+Breakdown of shootings that occurred with and without a police body camera.  
+```{r}
+
+body_camera <- police_data %>% 
+               group_by(body_camera) %>%
+               summarize (n = n()) %>% 
+               mutate(freq = n / sum(n)) %>% 
+               mutate_at(vars(starts_with("freq")), funs(round(., 4)))
+
+     
+body_camera %>% 
+kbl(col.names = c('Wearing Body Camera', 'Total Fatal Shootings', 'Proportions'), 
+    align = c('l', 'c')) %>% 
+kable_classic_2(full_width = F)
+
+```
+
