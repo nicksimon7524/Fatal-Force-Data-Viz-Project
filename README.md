@@ -1,4 +1,4 @@
-**Fatal Force Data Visualization Project**
+**Fatal Force Data Visualization**
 
 Objective of project: analyze the Washington Post's fatal force data set, with a focus on data visualization. 
 
